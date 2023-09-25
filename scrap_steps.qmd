@@ -1,0 +1,120 @@
+---
+title: "A Step-By-Step Guide To Web Scraping With R"
+format: html
+editor: visual
+---
+
+[Dario Radecic](A%20Step-By-Step%20Guide%20To%20Web%20Scraping%20With%20R%20%7C%20Better%20Data%20Science)
+
+## **Plan of attack**
+
+The goal to grab the information for every book in a category:
+
+-   Title: h3\>a\>title property
+
+-   Rating: p.star-rating \> class attribute
+
+-   Price: div.product_price \> div.price_color \> text
+
+-   Availability: div.product_price \> div.instock \> text
+
+-   Book URL: div.image_container \> a \> href \> property
+
+## Libraries
+
+```{r}
+pacman::p_load(tidyverse, rvest)
+```
+
+## Scrapping
+
+```{r}
+url <- 'http://books.toscrape.com/catalogue/category/books/travel_2/index.html'
+```
+
+Getting information sections: title, url, image, rating, price, availability:
+
+```{r}
+titles <- read_html(url) |>
+  html_nodes('h3') %>%
+  html_nodes('a') |>
+  html_text()
+```
+
+```{r}
+urls <- read_html(url) %>%
+  html_nodes('.image_container') |>
+  html_nodes('a') |>
+  html_attr('href') |>
+  str_replace_all('../../../', '/')
+```
+
+```{r}
+imgs <- read_html(url) %>% 
+  html_nodes('.image_container') %>%
+  html_nodes('img') %>%
+  html_attr('src') %>%
+  str_replace_all('../../../../', '/')
+```
+
+```{r}
+ratings <- read_html(url) %>% 
+  html_nodes('p.star-rating') %>% 
+  html_attr('class') %>% 
+  str_replace_all('star-rating ', '')
+```
+
+```{r}
+prices <- read_html(url) %>% 
+  html_nodes('.product_price') %>% 
+  html_nodes('.price_color') %>% 
+  html_text()
+```
+
+```{r}
+availability <- read_html(url) %>% 
+  html_nodes('.product_price') %>% 
+  html_nodes('.instock') %>% 
+  html_text() %>% 
+  str_trim()
+```
+
+Grouping all sections into a single dataframe:
+
+```{r}
+scraped <- data.frame(
+  Title = titles, 
+  URL = urls, 
+  SourceImage = imgs, 
+  Rating = ratings, 
+  Price = prices, 
+  Availability = availability
+)
+```
+
+```{r}
+scraped |> glimpse()
+```
+
+```{r}
+scraped |> knitr::kable()
+```
+
+## Data Wrangling and Viz
+
+```{r}
+df <- scraped |> 
+  select(Title, Rating, Price) |> 
+  mutate(Price = parse_number(Price),
+         Rating = fct_relevel(Rating, 'One', 'Two', 'Three', 'Four', 'Five'))
+df |> head(10)
+```
+
+```{r}
+df |> 
+  group_by(Rating) |> 
+  summarise(Price = mean(Price)) |> 
+  ggplot(aes(Rating, Price)) +
+  geom_col(fill = '#99eeff') +
+  theme_light()
+```
